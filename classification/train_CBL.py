@@ -26,6 +26,28 @@ parser.add_argument("--max_length", type=int, default=512)
 parser.add_argument("--num_workers", type=int, default=0)
 parser.add_argument("--dropout", type=float, default=0.1)
 
+import matplotlib.pyplot as plt
+
+def plot_weight_distribution(model, save_path, title=""):
+    """Plot histogram of weights in CBL projection layer."""
+    if hasattr(model, "projection"):
+        weights = model.projection.weight.detach().cpu().numpy().flatten()
+    elif hasattr(model, "cbl") and hasattr(model.cbl, "projection"):  # if nested inside backbone_cbl
+        weights = model.cbl.projection.weight.detach().cpu().numpy().flatten()
+    else:
+        print("No projection layer found.")
+        return
+
+    plt.figure(figsize=(8, 5))
+    plt.hist(weights, bins=50)
+    plt.title(title)
+    plt.xlabel("Weight value")
+    plt.ylabel("Frequency")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+
 
 class ClassificationDataset(torch.utils.data.Dataset):
     def __init__(self, encode_roberta, s):
@@ -197,6 +219,12 @@ if __name__ == "__main__":
     prefix += "/"
     if not os.path.exists(prefix):
         os.makedirs(prefix)
+        
+    # [Change] vẽ phân phối của weight trong cbl.projection trước khi train
+    if args.tune_cbl_only:
+        plot_weight_distribution(cbl, prefix + "weight_dist_before.png", title="CBL Projection Weights (Before Training)")
+    else:
+        plot_weight_distribution(backbone_cbl, prefix + "weight_dist_before.png", title="CBL Projection Weights (Before Training)")
 
     model_name = "cbl"
     if args.tune_cbl_only:
@@ -284,3 +312,9 @@ if __name__ == "__main__":
 
     end = time.time()
     print("time of training CBL:", (end - start) / 3600, "hours")
+    
+    # [Change] vẽ phân phối của weight trong cbl.projection sau khi train
+    if args.tune_cbl_only:
+        plot_weight_distribution(cbl, prefix + "weight_dist_after.png", title="CBL Projection Weights (After Training)")
+    else:
+        plot_weight_distribution(backbone_cbl, prefix + "weight_dist_after.png", title="CBL Projection Weights (After Training)")
